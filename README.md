@@ -14,3 +14,6 @@
 
 ### Pre-trained model downloadable link:
 https://drive.google.com/file/d/1yjF1w_FW9_HNtLL7Vgv7wU_ybBJRpoWI/view?usp=sharing
+
+### Inference notebook link:
+https://colab.research.google.com/drive/17jnyI2_YIYKYG9rAFj71K6Sill5JhT_9?usp=sharing

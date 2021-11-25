@@ -16,14 +16,17 @@ from PIL import Image
 
 
 bbox_prop = ['height', 'left', 'top', 'width', 'label']
+
+
 def get_img_boxes(f, idx=0):
     """
-    get the 'height', 'left', 'top', 'width', 'label' of bounding boxes of an image
+    get the 'height', 'left', 'top', 'width', 'label'
+    of bounding boxes of an image
     :param f: h5py.File
     :param idx: index of the image
     :return: dictionary
     """
-    meta = { key : [] for key in bbox_prop}
+    meta = {key: [] for key in bbox_prop}
 
     box = f[bboxs[idx][0]]
     for key in box.keys():
@@ -33,7 +36,8 @@ def get_img_boxes(f, idx=0):
             for i in range(box[key].shape[0]):
                 meta[key].append(int(f[box[key][i][0]][()].item()))
     return meta
-    
+
+
 def get_img_name(f, idx=0):
     img_name = ''.join(map(chr, f[names[idx][0]][()].flatten()))
     return(img_name)
@@ -63,7 +67,7 @@ class MyDataset(Dataset):
             label = self.bbox_list[idx]['label'][i]
             boxes.append([left, top, left+width, top+height])
             labels.append(label)
-            
+
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
         # Let label in range of 0-9(label should start at 0)
         labels = torch.as_tensor(labels, dtype=torch.int64)
@@ -71,13 +75,22 @@ class MyDataset(Dataset):
         target = {}
         target['boxes'] = boxes
         target['labels'] = labels
-        
+
         return transform(img, target)
-    
+
+
+def collate_fn(batch):
+    return tuple(zip(*batch))
+
+
 def resize(boxes, dims=(128, 128)):
-    new_dims = torch.FloatTensor([dims[1], dims[0], dims[1], dims[0]]).unsqueeze(0)
+    new_dims = torch.FloatTensor([dims[1],
+                                  dims[0],
+                                  dims[1],
+                                  dims[0]]).unsqueeze(0)
     return boxes * new_dims
-    
+
+
 def transform(img, target):
     h = img.height
     w = img.width
@@ -86,27 +99,7 @@ def transform(img, target):
     target['boxes'] = resize(target['boxes'] / old_dims)
     return transform_train(img), target
 
-
-def pad(img, size_max=876):
-    """
-    Pads images to the specified size (height x width).
-    """
-    pad_height = max(0, size_max - img.height)
-    pad_width = max(0, size_max - img.width)
-
-    pad_top = pad_height // 2
-    pad_bottom = pad_height - pad_top
-    pad_left = pad_width // 2
-    pad_right = pad_width - pad_left
-
-    return transforms.functional.pad(
-        img,
-        (pad_left, pad_top, pad_right, pad_bottom),
-        fill=tuple(map(lambda x: int(round(x * 256)), (0.485, 0.456, 0.406))))
-
-
 transform_train = transforms.Compose([
-    #transforms.Lambda(pad),
     transforms.Resize(128),
     transforms.RandomOrder([
        transforms.RandomHorizontalFlip(),
@@ -115,10 +108,6 @@ transform_train = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
-
-
-def collate_fn(batch):
-    return tuple(zip(*batch))
 
 
 file_path = 'train/train/'
@@ -136,7 +125,7 @@ for i in range(size):
     size_max = max(w, h, size_max)
     train_imgs_list.append(get_img_name(f, i))
     train_bboxs_list.append(get_img_boxes(f, i))
-#print(size_max)
+
 
 if __name__ == '__main__':
     train_loader = DataLoader(MyDataset(file_path,
@@ -147,16 +136,16 @@ if __name__ == '__main__':
                               collate_fn=collate_fn,
                               shuffle=True,
                               num_workers=0)
-    
+
     # Pretrained model: Faster R-CNN
     net_ft = models.detection.faster_rcnn.fasterrcnn_resnet50_fpn(pretrained=True)
-    
+
     in_features = net_ft.roi_heads.box_predictor.cls_score.in_features
     # class: 0-10, 0 is background
     num_classes = 11
     # Replace the predictor head with our defined num_classes
     net_ft.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    
+
     criterion = nn.CrossEntropyLoss()
 
     optimizer_ft = optim.SGD(net_ft.parameters(), lr=0.005, momentum=0.9)
@@ -171,24 +160,17 @@ if __name__ == '__main__':
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             # get the inputs; data is a list of [inputs, labels]
-
-            
-            
             images, targets = data
             images = list(image.cuda() for image in images)
             targets = [{k: v.cuda() for k, v in t.items()} for t in targets]
-            
-            #loss_dict = net_ft(images, targets)
-            #losses = sum(loss for loss in loss_dict.values())
-            
+
             # zero the parameter gradients
             optimizer_ft.zero_grad()
-            
+
             # forward + backward + optimize
             loss_dict = net_ft(images, targets)
             losses = sum(loss for loss in loss_dict.values())
-            
-            #loss = criterion(outputs, targets)
+
             losses.backward()
             optimizer_ft.step()
 
@@ -203,5 +185,3 @@ if __name__ == '__main__':
     # Save trained neural network
     PATH = './HW2_net_cos.pth'
     torch.save(net_ft, PATH)
-
-

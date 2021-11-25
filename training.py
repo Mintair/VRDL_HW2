@@ -185,4 +185,4 @@ if __name__ == '__main__':
     # Save trained neural network
     PATH = './HW2_net_cos.pth'
     torch.save(net_ft, PATH)
- 
+
